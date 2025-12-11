@@ -2,53 +2,83 @@
 function setup() {
   const allEpisodes = getAllEpisodes();
   makePageForEpisodes(allEpisodes);
-  console.log (allEpisodes);
 }
 
-// name: "The Kingsroad";
-// number: 2;
-// runtime: 60;
-// season: 1;
-// summary: "<p>An incident on the Kingsroad threatens Eddard and Robert's friendship. Jon and Tyrion travel to the Wall, where they discover that the reality of the Night's Watch may not match the heroic image of it.</p>";
-// url: "http://www.tvmaze.com/episodes/4953/game-of-thrones-1x02-the-kingsroad";
+function padToTwoDigits(number) {
+  // This keeps numbers like 3 as 03
+  const asText = number.toString();
+  if (asText.length === 1) {
+    return "0" + asText;
+  }
+  return asText;
+}
+
+function makeEpisodeCode(season, episodeNumber) {
+  // This makes the code like S01E01
+  return "S" + padToTwoDigits(season) + "E" + padToTwoDigits(episodeNumber);
+}
+
+function makeImageElement(episode) {
+  // This stops the page breaking when no image
+  if (!episode.image || !episode.image.medium) {
+    return null;
+  }
+  const image = document.createElement("img");
+  image.src = episode.image.medium;
+  image.alt = episode.name + " poster";
+  return image;
+}
+
+function makeSummaryElement(summaryHTML) {
+  // This gives a short text when summary is empty
+  const summaryBox = document.createElement("div");
+  if (summaryHTML) {
+    summaryBox.innerHTML = summaryHTML;
+  } else {
+    summaryBox.textContent = "No summary for this episode.";
+  }
+  return summaryBox;
+}
+
+function makeTitleElement(episode) {
+  const title = document.createElement("h1");
+  title.textContent = episode.name + " - " + makeEpisodeCode(episode.season, episode.number);
+  return title;
+}
+
+function makeInfoElement(episode) {
+  const info = document.createElement("p");
+  info.textContent = "Season " + episode.season + " Episode " + episode.number;
+  return info;
+}
+
+function createEpisodeCard(episode) {
+  const card = document.createElement("div");
+  card.className = "episode-card";
+  card.appendChild(makeTitleElement(episode));
+  card.appendChild(makeInfoElement(episode));
+  const cardImage = makeImageElement(episode);
+  if (cardImage) {
+    cardImage.loading = "lazy";
+    card.appendChild(cardImage);
+  }
+  card.appendChild(makeSummaryElement(episode.summary));
+  return card;
+}
 
 function makePageForEpisodes(episodeList) {
-   const rootElem = document.getElementById("root");
-   rootElem.textContent = `Got ${episodeList.length} episode(s)`;
-   rootElem.innerHTML = "";
+  const rootElem = document.getElementById("root");
+  rootElem.innerHTML = "";
 
-   // Loop through every episode in the list
-   //padStart only work on strings
+  const credit = document.createElement("p");
+  credit.innerHTML =
+    'Data from <a href="https://www.tvmaze.com/" target="_blank" rel="noopener noreferrer">TVMaze</a>';
+  rootElem.appendChild(credit);
 
-   episodeList.forEach((episode) => {
-      const seasonPad = episode.season.toString().padStart(2, "0");
-      const episodePad = episode.number.toString().padStart(2, "0");
-      const episodeCode = `S${seasonPad}E${episodePad}`;
-
-      //Cards 
-
-      const card = document.createElement("div");
-      card.className = "episode-card";
-
-      //epsidoe Name
-      const titleName = document.createElement("h1");
-      titleName.innerText = `${episode.name} - ${episodeCode}`;
-      card.appendChild(titleName);
-
-      // Epsidode image
-      const image = document.createElement("img");
-      image.src = episode.image.medium;
-      card.appendChild(image);
-
-      // Episode Summary
-     const summary = document.createElement("div");
-     summary.innerHTML = episode.summary;
-     card.appendChild(summary);
-
-     rootElem.appendChild(card);
-
-   }); 
+  episodeList.forEach((episode) => {
+    const card = createEpisodeCard(episode);
+    rootElem.appendChild(card);
+  });
 }
-
 
 window.onload = setup;
