@@ -1,38 +1,90 @@
 // You can edit ALL of the code here
-const EPISODES_URL = "https://api.tvmaze.com/shows/82/episodes";
+const SHOWS_URL = "https://api.tvmaze.com/shows";
+const EPISODES_URL_BASE = "https://api.tvmaze.com/shows/";
 
-let allEpisodes = [];
+let allShows = [];
+let episodesCache = {};
+let currentShowId = "";
+let currentEpisodes = [];
+
 let cardsWrapper = null;
 let infoLine = null;
 let searchInput = null;
 let episodeSelect = null;
+let showSelect = null;
 
 function setup() {
    buildPageFrame();
-   loadEpisodes();
+   loadShows();
 }
 
-async function loadEpisodes() {
-   // We fetch the data only one time when the page starts.
-   showLoadingMessage();
+async function loadShows() {
+   showLoadingMessage("Loading shows...");
+   setControlsEnabled(false);
+   setShowSelectEnabled(false);
 
    try {
-      const response = await fetch(EPISODES_URL);
+      const response = await fetch(SHOWS_URL);
       if (!response.ok) {
-         throw new Error("Failed to load data");
+         throw new Error("Failed to load shows");
       }
 
       const data = await response.json();
-      allEpisodes = data;
+      allShows = sortShowsByName(data);
+      fillShowSelect(allShows);
+      setShowSelectEnabled(true);
 
-      setControlsEnabled(true);
-      fillEpisodeSelect(allEpisodes);
-      showEpisodes(allEpisodes);
+      const firstShowId = pickInitialShowId(allShows);
+      if (firstShowId) {
+         showSelect.value = firstShowId;
+         await loadEpisodesForShow(firstShowId);
+      } else {
+         showErrorMessage("No shows found.");
+      }
    } catch (error) {
-      // Show an error to real users, not only in the console.
-      showErrorMessage();
-      setControlsEnabled(false);
+      showErrorMessage("Error: could not load shows.");
    }
+}
+
+async function loadEpisodesForShow(showId) {
+   if (!showId) {
+      return;
+   }
+
+   currentShowId = showId;
+   setControlsEnabled(false);
+   showLoadingMessage("Loading episodes...");
+
+   if (episodesCache[showId]) {
+      setCurrentEpisodes(episodesCache[showId]);
+      setControlsEnabled(true);
+      return;
+   }
+
+   try {
+      const response = await fetch(EPISODES_URL_BASE + showId + "/episodes");
+      if (!response.ok) {
+         throw new Error("Failed to load episodes");
+      }
+
+      const data = await response.json();
+      if (showId !== currentShowId) {
+         return;
+      }
+
+      episodesCache[showId] = data;
+      setCurrentEpisodes(data);
+      setControlsEnabled(true);
+   } catch (error) {
+      showErrorMessage("Error: could not load episodes.");
+   }
+}
+
+function setCurrentEpisodes(episodes) {
+   currentEpisodes = episodes;
+   searchInput.value = "";
+   fillEpisodeSelect(currentEpisodes);
+   showEpisodes(currentEpisodes);
 }
 
 function setControlsEnabled(isEnabled) {
@@ -40,15 +92,42 @@ function setControlsEnabled(isEnabled) {
    episodeSelect.disabled = !isEnabled;
 }
 
-function showLoadingMessage() {
-   cardsWrapper.innerHTML = "<h2>Loading episodes... please wait.</h2>";
-   infoLine.textContent = "Loading episodes...";
+function setShowSelectEnabled(isEnabled) {
+   showSelect.disabled = !isEnabled;
 }
 
-function showErrorMessage() {
-   cardsWrapper.innerHTML =
-      "<h2 style=\"color: red;\">Error: could not load episodes.</h2>";
-   infoLine.textContent = "Could not load episodes.";
+function showLoadingMessage(message) {
+   cardsWrapper.innerHTML = "<h2>" + message + "</h2>";
+   infoLine.textContent = message;
+}
+
+function showErrorMessage(message) {
+   cardsWrapper.innerHTML = "<h2 style=\"color: red;\">" + message + "</h2>";
+   infoLine.textContent = message;
+}
+
+function sortShowsByName(showList) {
+   const copy = showList.slice();
+   copy.sort((showA, showB) => {
+      const nameA = showA.name.toLowerCase();
+      const nameB = showB.name.toLowerCase();
+      return nameA.localeCompare(nameB);
+   });
+   return copy;
+}
+
+function pickInitialShowId(showList) {
+   for (let i = 0; i < showList.length; i++) {
+      if (showList[i].id === 82) {
+         return showList[i].id.toString();
+      }
+   }
+
+   if (showList.length === 0) {
+      return "";
+   }
+
+   return showList[0].id.toString();
 }
 
 function padToTwoDigits(number) {
@@ -118,6 +197,14 @@ function buildPageFrame() {
    const controls = document.createElement("section");
    controls.className = "controls";
 
+   const showLabel = document.createElement("label");
+   showLabel.textContent = "Show: ";
+
+   showSelect = document.createElement("select");
+   showSelect.addEventListener("change", handleShowChange);
+   showLabel.appendChild(showSelect);
+   controls.appendChild(showLabel);
+
    const searchLabel = document.createElement("label");
    searchLabel.textContent = "Search: ";
 
@@ -151,12 +238,25 @@ function buildPageFrame() {
    cardsWrapper.id = "episode-list";
    rootElem.appendChild(cardsWrapper);
 
-   // Disable controls until we have data.
    setControlsEnabled(false);
+   setShowSelectEnabled(false);
+}
+
+function fillShowSelect(showList) {
+   while (showSelect.options.length > 0) {
+      showSelect.remove(0);
+   }
+
+   for (let i = 0; i < showList.length; i++) {
+      const show = showList[i];
+      const option = document.createElement("option");
+      option.value = show.id.toString();
+      option.textContent = show.name;
+      showSelect.appendChild(option);
+   }
 }
 
 function fillEpisodeSelect(episodeList) {
-   // Clear old options before adding new ones.
    while (episodeSelect.options.length > 0) {
       episodeSelect.remove(0);
    }
@@ -189,8 +289,16 @@ function showEpisodes(episodeList) {
       "Showing " +
       episodeList.length +
       " / " +
-      allEpisodes.length +
+      currentEpisodes.length +
       " episodes";
+}
+
+function handleShowChange() {
+   const selectedId = showSelect.value;
+   if (selectedId === currentShowId) {
+      return;
+   }
+   loadEpisodesForShow(selectedId);
 }
 
 function handleSearchInput() {
@@ -198,13 +306,13 @@ function handleSearchInput() {
    episodeSelect.value = "all";
 
    if (term === "") {
-      showEpisodes(allEpisodes);
+      showEpisodes(currentEpisodes);
       return;
    }
 
    const matches = [];
-   for (let i = 0; i < allEpisodes.length; i++) {
-      const episode = allEpisodes[i];
+   for (let i = 0; i < currentEpisodes.length; i++) {
+      const episode = currentEpisodes[i];
       const nameText = episode.name.toLowerCase();
       const summaryText = episode.summary ? episode.summary.toLowerCase() : "";
 
@@ -220,14 +328,14 @@ function handleSelectChange() {
    const choice = episodeSelect.value;
 
    if (choice === "all") {
-      showEpisodes(allEpisodes);
+      showEpisodes(currentEpisodes);
       return;
    }
 
    searchInput.value = "";
 
-   for (let i = 0; i < allEpisodes.length; i++) {
-      const episode = allEpisodes[i];
+   for (let i = 0; i < currentEpisodes.length; i++) {
+      const episode = currentEpisodes[i];
       if (episode.id.toString() === choice) {
          showEpisodes([episode]);
          const card = document.getElementById("episode-" + episode.id);
