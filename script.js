@@ -1,42 +1,57 @@
 // You can edit ALL of the code here
-let savedEpisodes = [];
+const EPISODES_URL = "https://api.tvmaze.com/shows/82/episodes";
+
+let allEpisodes = [];
 let cardsWrapper = null;
 let infoLine = null;
 let searchInput = null;
 let episodeSelect = null;
 
 function setup() {
-   // Loading
    buildPageFrame();
+   loadEpisodes();
+}
 
-   //Fetch data from the API
-   fetch("https://api.tvmaze.com/shows/82/episodes")
-      .then((response) => {
-         //Check if the request 
-         if (response.ok) {
-            return response.json();
-         } else {
-            throw new Error("Failed to load data");
-         }
-      })
-      .then((data) => {
-         // data 
-         savedEpisodes = data;
+async function loadEpisodes() {
+   // We fetch the data only one time when the page starts.
+   showLoadingMessage();
 
-         //Populate the dropdown and list
-         fillEpisodeSelect(savedEpisodes);
-         showEpisodes(savedEpisodes);
-      })
-      .catch((error) => {
-         //error message
-         console.log(error);
-         const rootElem = document.getElementById("root");
-         rootElem.innerHTML = `<h2 style="color: red; padding: 20px;">Error: Could not load episodes. Please try again later.</h2>`;
-      });
+   try {
+      const response = await fetch(EPISODES_URL);
+      if (!response.ok) {
+         throw new Error("Failed to load data");
+      }
+
+      const data = await response.json();
+      allEpisodes = data;
+
+      setControlsEnabled(true);
+      fillEpisodeSelect(allEpisodes);
+      showEpisodes(allEpisodes);
+   } catch (error) {
+      // Show an error to real users, not only in the console.
+      showErrorMessage();
+      setControlsEnabled(false);
+   }
+}
+
+function setControlsEnabled(isEnabled) {
+   searchInput.disabled = !isEnabled;
+   episodeSelect.disabled = !isEnabled;
+}
+
+function showLoadingMessage() {
+   cardsWrapper.innerHTML = "<h2>Loading episodes... please wait.</h2>";
+   infoLine.textContent = "Loading episodes...";
+}
+
+function showErrorMessage() {
+   cardsWrapper.innerHTML =
+      "<h2 style=\"color: red;\">Error: could not load episodes.</h2>";
+   infoLine.textContent = "Could not load episodes.";
 }
 
 function padToTwoDigits(number) {
-   // pad
    const asText = number.toString();
    if (asText.length === 1) {
       return "0" + asText;
@@ -45,12 +60,10 @@ function padToTwoDigits(number) {
 }
 
 function makeEpisodeCode(season, episodeNumber) {
-   // pad S01E01
    return "S" + padToTwoDigits(season) + "E" + padToTwoDigits(episodeNumber);
 }
 
 function makeImageElement(episode) {
-   // no image
    if (!episode.image || !episode.image.medium) {
       return null;
    }
@@ -62,7 +75,6 @@ function makeImageElement(episode) {
 }
 
 function makeSummaryElement(summaryHTML) {
-   //summary is empty
    const summaryBox = document.createElement("div");
    if (summaryHTML) {
       summaryBox.innerHTML = summaryHTML;
@@ -137,22 +149,23 @@ function buildPageFrame() {
 
    cardsWrapper = document.createElement("section");
    cardsWrapper.id = "episode-list";
-
-   //loading
-   cardsWrapper.innerHTML = "<h2>Loading episodes... please wait.</h2>";
-
    rootElem.appendChild(cardsWrapper);
+
+   // Disable controls until we have data.
+   setControlsEnabled(false);
 }
 
 function fillEpisodeSelect(episodeList) {
-   //rebuilds list 
+   // Clear old options before adding new ones.
    while (episodeSelect.options.length > 0) {
       episodeSelect.remove(0);
    }
+
    const allOption = document.createElement("option");
    allOption.value = "all";
    allOption.textContent = "Show all episodes";
    episodeSelect.appendChild(allOption);
+
    for (let i = 0; i < episodeList.length; i++) {
       const episode = episodeList[i];
       const option = document.createElement("option");
@@ -165,47 +178,56 @@ function fillEpisodeSelect(episodeList) {
 
 function showEpisodes(episodeList) {
    cardsWrapper.innerHTML = "";
+
    for (let i = 0; i < episodeList.length; i++) {
       const episode = episodeList[i];
       const card = createEpisodeCard(episode);
       cardsWrapper.appendChild(card);
    }
+
    infoLine.textContent =
       "Showing " +
       episodeList.length +
       " / " +
-      savedEpisodes.length +
+      allEpisodes.length +
       " episodes";
 }
 
 function handleSearchInput() {
    const term = searchInput.value.trim().toLowerCase();
    episodeSelect.value = "all";
+
    if (term === "") {
-      showEpisodes(savedEpisodes);
+      showEpisodes(allEpisodes);
       return;
    }
+
    const matches = [];
-   for (let i = 0; i < savedEpisodes.length; i++) {
-      const episode = savedEpisodes[i];
+   for (let i = 0; i < allEpisodes.length; i++) {
+      const episode = allEpisodes[i];
       const nameText = episode.name.toLowerCase();
       const summaryText = episode.summary ? episode.summary.toLowerCase() : "";
+
       if (nameText.includes(term) || summaryText.includes(term)) {
          matches.push(episode);
       }
    }
+
    showEpisodes(matches);
 }
 
 function handleSelectChange() {
    const choice = episodeSelect.value;
+
    if (choice === "all") {
-      showEpisodes(savedEpisodes);
+      showEpisodes(allEpisodes);
       return;
    }
+
    searchInput.value = "";
-   for (let i = 0; i < savedEpisodes.length; i++) {
-      const episode = savedEpisodes[i];
+
+   for (let i = 0; i < allEpisodes.length; i++) {
+      const episode = allEpisodes[i];
       if (episode.id.toString() === choice) {
          showEpisodes([episode]);
          const card = document.getElementById("episode-" + episode.id);
